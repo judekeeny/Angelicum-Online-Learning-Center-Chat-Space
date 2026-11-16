@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* =========================================================
+   SETTINGS — fill these in (see README.md)
+   ========================================================= */
+window.CLASS_CONFIG = {
+  SUPABASE_URL: "https://hhqdzjkezizbaewmiymg.supabase.co",          // e.g. https://abcd1234.supabase.co
+  SUPABASE_KEY: "sb_publishable_XpuXja_UEkD6eNbnFvjOsw_hE2AoOEL",  // the public key, NOT the service/secret key
+  CLASS_NAME:   "The Angelicum Learning Center Chat Space",                      // shown at the top of the site
+  TAGLINE:      "Chat, essays and ideas",
+  GOOGLE_SIGNIN: true                                   // set false if you skip the Google setup step
+};
+</script>
+<style>
+  :root{
+    --paper:#f7f8fa; --card:#fff; --ink:#20252b; --muted:#68717b; --line:#e4e7eb;
+    --accent:#00384f; --accent-ink:#fff; --accent-soft:#eeebff; --gold:#ffd04a; --ok:#2f6b3a; --warn:#9a6a00;
+    --radius:10px; --shadow:0 1px 2px rgba(0,40,58,.06),0 4px 16px rgba(0,40,58,.06);
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  html,body{margin:0;height:100%}
+  body{background:var(--paper);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;display:flex;flex-direction:column;height:100vh;height:100dvh}
+  a{color:var(--accent)}
+  button,input,select,textarea{font:inherit;color:inherit}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+  header.top{border-top:6px solid var(--accent);border-bottom:1px solid var(--line);background:var(--card);flex:none}
+  header.top .wrap{display:flex;align-items:center;gap:20px;min-height:64px;flex-wrap:wrap;padding-top:8px;padding-bottom:8px}
+  .brand{font-family:Fraunces,serif;font-weight:700;font-size:21px;text-decoration:none;color:var(--ink);letter-spacing:-.01em;line-height:1.2}
+  .brand small{display:block;font:500 12px Inter,sans-serif;color:var(--muted);letter-spacing:0}
+  nav.main{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+  nav.main a{padding:7px 12px;border-radius:999px;text-decoration:none;color:var(--ink);font-weight:500;font-size:14px;position:relative}
+  nav.main a:hover{background:var(--paper)}
+  nav.main a.on{background:var(--accent-soft);color:var(--accent)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:middle}
+  .who{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted)}
+  main{flex:1;min-height:0;overflow-y:auto;padding:32px 0 80px}
+  main.full{overflow:hidden;padding:16px 0}
+  main.full > .wrap{height:100%}
+  h1,h2,h3{font-family:Fraunces,serif;letter-spacing:-.01em;line-height:1.2;margin:0 0 .4em}
+  h1{font-size:34px} h2{font-size:24px}
+  .muted{color:var(--muted)}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);padding:9px 16px;border-radius:8px;cursor:pointer;font-weight:500;font-size:14px;text-decoration:none;color:var(--ink);white-space:nowrap}
+  .btn:hover{border-color:#b8c5cc}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:#182a32}
+  .btn.primary:hover{filter:brightness(.96)}
+  .btn.danger{color:#a3261b}
+  .btn.small{padding:5px 10px;font-size:13px}
+  .btn[disabled]{opacity:.55;cursor:default}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .panel{padding:28px}
+  label{display:block;font-weight:600;font-size:14px;margin:16px 0 6px}
+  input[type=text],input[type=email],input[type=password],input[type=search],select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  textarea{min-height:340px;font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.7;resize:vertical}
+  .hint{font-size:13px;color:var(--muted);margin-top:6px}
+  .msg{padding:10px 14px;border-radius:8px;font-size:14px;margin:14px 0}
+  .msg.err{background:#fbe9e7;color:#8c1d12}
+  .msg.ok{background:#e8f3ea;color:var(--ok)}
+  .msg:empty{display:none}
+  .linkbtn{background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-size:14px;text-decoration:underline}
+  .loading{padding:60px;text-align:center;color:var(--muted)}
+
+  /* auth */
+  .auth{max-width:420px;margin:24px auto}
+  .auth .hero{text-align:center;margin-bottom:22px}
+  .auth .hero h1{font-size:38px}
+  .tabs{display:flex;border-bottom:1px solid var(--line);margin:-28px -28px 8px}
+  .tabs button{flex:1;padding:14px;border:0;background:none;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
+  .tabs button.on{color:var(--accent);border-color:var(--accent)}
+  .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;margin:20px 0}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+  .gbtn{width:100%;justify-content:center;padding:11px}
+  .full-btn{width:100%;justify-content:center;margin-top:20px;padding:11px}
+
+  /* chat layout */
+  .chatapp{display:grid;grid-template-columns:260px 1fr;height:100%;overflow:hidden}
+  .side{border-right:1px solid var(--line);overflow-y:auto;padding:14px 10px;background:#f8f9fa}
+  .side h4{display:flex;justify-content:space-between;align-items:center;font:600 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 8px 6px}
+  .side h4:first-child{margin-top:2px}
+  .side h4 button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 4px}
+  .side h4 button:hover,.side h4 a.plus:hover{color:var(--accent)}
+  .side h4 a.plus{color:var(--muted);font-size:18px;line-height:1;padding:0 4px;text-decoration:none}
+  .room{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;text-decoration:none;color:var(--ink);font-size:15px}
+  .room:hover{background:var(--paper)}
+  .room.on{background:var(--accent-soft);color:var(--accent)}
+  .room.unread{font-weight:700}
+  .room .ic{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;background:#e8eef1;color:#244b5a}
+  .room .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .side .inl{display:flex;gap:6px;margin:4px 6px 8px}
+  .side .inl input{padding:6px 8px;font-size:14px}
+  .side .empty-dm{font-size:13px;color:var(--muted);padding:2px 10px}
+  .pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .panehead{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .panehead h2{font-size:20px;margin:0}
+  .panehead .sub{font-size:13px;color:var(--muted)}
+  .panehead .grow{flex:1;min-width:0}
+  .status{font-size:13px;color:var(--warn)}
+  .chatlist{flex:1;overflow-y:auto;padding:12px 18px 8px;display:flex;flex-direction:column;gap:4px}
+  .day{align-self:center;font-size:12px;color:var(--muted);background:var(--paper);padding:3px 10px;border-radius:999px;margin:12px 0 6px}
+  .more{align-self:center;margin:6px 0}
+  .m{max-width:78%;align-self:flex-start}
+  .m.mine{align-self:flex-end;text-align:right}
+  .m .who2{font-size:12px;color:var(--muted);margin:8px 4px 2px}
+  .m .who2 b{color:var(--ink);font-weight:600;margin-right:6px}
+  .m .bb{display:inline-block;text-align:left;padding:8px 13px;border-radius:16px;background:#fff;border:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere}
+  .m.mine .bb{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .m .del{visibility:hidden;font-size:12px;margin:0 6px}
+  .m:hover .del,.m:focus-within .del{visibility:visible}
+  .wcard{display:block;text-align:left;margin-top:4px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;background:#fff;text-decoration:none;color:var(--ink);max-width:340px;margin-left:auto;margin-right:0}
+  .m:not(.mine) .wcard{margin-left:0;margin-right:auto}
+  .wcard:hover{box-shadow:var(--shadow)}
+  .wcard .t{font-family:Fraunces,serif;font-weight:700;font-size:17px;margin:6px 0 2px;line-height:1.25}
+  .wcard .s{font-size:12px;color:var(--muted)}
+  .wcard.gone{border-left-color:var(--line);color:var(--muted);font-style:italic}
+  .composer{border-top:1px solid var(--line);padding:10px 12px;position:relative}
+  .composer .rowc{display:flex;gap:8px;align-items:flex-end}
+  .composer textarea{min-height:44px;height:44px;max-height:140px;font:15px/1.4 Inter,sans-serif;padding:11px 12px;resize:none}
+  .composer .btn{height:44px}
+  .composer textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;background:var(--accent-soft);color:var(--accent);padding:4px 10px;border-radius:999px;margin:0 0 8px}
+  .chip button{border:0;background:none;color:inherit;cursor:pointer;font-size:15px;padding:0}
+  .readonly{padding:14px;text-align:center;font-size:14px;color:var(--muted);border-top:1px solid var(--line)}
+  .picker{position:absolute;left:12px;right:12px;bottom:calc(100% + 6px);max-height:340px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 30px rgba(0,40,58,.15);z-index:5}
+  .picker input{border:0;border-bottom:1px solid var(--line);border-radius:10px 10px 0 0}
+  .picker .lst{overflow-y:auto}
+  .picker .it{display:block;width:100%;text-align:left;border:0;background:none;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .picker .it:hover{background:var(--paper)}
+  .picker .it small{display:block;color:var(--muted);font-size:12px}
+  .people{padding:18px;overflow-y:auto;flex:1}
+  .plist{margin-top:10px;max-height:46vh;overflow-y:auto}
+  .person input{width:18px;height:18px;flex:none}
+  .gobar{position:sticky;bottom:0;padding:12px 0 2px;background:var(--card)}
+  .room .ic.grp{background:var(--accent-soft);color:var(--accent)}
+  .room.newchat{color:var(--muted)}
+  .gpanel{border-bottom:1px solid var(--line);padding:12px 18px;background:#f8f9fa;max-height:55vh;overflow-y:auto}
+  .gtitle{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .gmembers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .gmembers .chip{margin:0;background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .grow-row{display:flex;gap:8px;margin-bottom:10px}
+  .grow-row input{padding:6px 10px}
+  .gactions{display:flex;gap:8px;margin-bottom:10px}
+  .person{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;background:none;border-radius:8px;cursor:pointer;text-align:left;font-size:15px}
+  .person:hover{background:var(--paper)}
+  .person .ic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#e8eef1;font-weight:600;font-size:13px}
+  @media (max-width:760px){
+    header.top .wrap{gap:6px 12px;min-height:0;padding-left:12px;padding-right:12px}
+    .brand{font-size:18px} .brand small{display:none}
+    nav.main{order:3;flex-basis:100%;overflow-x:auto;flex-wrap:nowrap}
+    nav.main a{padding:5px 10px;white-space:nowrap}
+    .who{margin-left:auto}
+    .chatapp{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    .side{border-right:0;border-bottom:1px solid var(--line);max-height:30vh}
+    main.full{padding:8px 0}
+    main.full > .wrap{padding:0 8px}
+    .m{max-width:90%}
+  }
+
+  /* library */
+  .libhead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+  .filters input{flex:1;min-width:200px}
+  .filters select{width:auto;min-width:150px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px}
+  .work{display:flex;flex-direction:column;padding:20px 22px;text-decoration:none;color:inherit;transition:transform .12s, box-shadow .12s}
+  .work:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(0,40,58,.08),0 10px 28px rgba(0,40,58,.10)}
+  .tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:4px;align-self:flex-start}
+  .work h3{font-size:20px;margin:12px 0 6px}
+  .work .by{font-size:13px;color:var(--muted)}
+  .work .ex{font-family:"Source Serif 4",Georgia,serif;font-size:15px;color:var(--ink);margin:12px 0 0;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+  .empty{text-align:center;padding:60px 20px}
+
+  /* reading */
+  .reader{max-width:720px;margin:0 auto}
+  .reader .meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:14px;margin-bottom:28px}
+  .reader h1{font-size:40px;margin-top:14px}
+  .prose{font-family:"Source Serif 4",Georgia,serif;font-size:19px;line-height:1.8}
+  .prose p{margin:0 0 1.1em}
+  .attach{margin-top:28px;padding:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .attach img{max-width:100%;border-radius:8px;display:block}
+  .pdf{width:100%;height:80vh;border:1px solid var(--line);border-radius:8px;margin-top:20px;background:#fff}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:36px;padding-top:20px;border-top:1px solid var(--line)}
+  .share{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding:14px;background:#fff;border:1px solid var(--line);border-radius:10px}
+  .share select,.share input{width:auto;flex:1;min-width:160px}
+  .back{font-size:14px;text-decoration:none;display:block;width:max-content;margin-bottom:22px}
+
+  /* editor */
+  .editor{max-width:760px;margin:0 auto}
+  .row{display:grid;grid-template-columns:1fr 200px;gap:14px}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;background:#fff;cursor:pointer}
+  .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  @media (max-width:600px){.row{grid-template-columns:1fr} h1{font-size:28px} .reader h1{font-size:30px}}
+
+  /* teacher */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  .pill{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef1f3}
+  .section{margin-bottom:28px}
+  .toggle{display:flex;align-items:center;gap:10px;font-weight:500;margin:0}
+  .toggle input{width:18px;height:18px}
+</style>
+</head>
+<body>
+<header class="top" id="top" hidden></header>
+<main id="main"><div class="wrap" id="app"><div class="loading">Loading…</div></div></main>
+
+<script>
+(function(){
+"use strict";
+const C = window.CLASS_CONFIG;
+const KINDS = ["Essay","Poem","Short Story","Book Report","Journal","Other"];
+const PAGE = 100;            // chat messages loaded at a time
+const app = document.getElementById("app");
+const mainEl = document.getElementById("main");
+const topEl = document.getElementById("top");
+const BASE_TITLE = C.CLASS_NAME || "Class Chat";
+document.title = BASE_TITLE;
+
+/* ---------- tiny DOM helper (all text goes in via textContent — safe) ---------- */
+function h(tag, props, ...kids){
+  const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(props || {})){
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()){
+    if (kid === null || kid === undefined || kid === false) continue;
+    e.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+function show(full, ...nodes){
+  mainEl.classList.toggle("full", !!full);
+  app.replaceChildren(...nodes);
+  mainEl.scrollTop = 0;
+}
+function fmtDate(s){ return new Date(s).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); }
+function initials(n){ return (n || "?").split(/\s+/).filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join(""); }
+function friendly(err){
+  const m = (err && (err.message || err.error_description)) || String(err);
+  if (/Invalid login/i.test(m)) return "That email and password don't match. Try again, or use “Forgot password?”.";
+  if (/Email not confirmed/i.test(m)) return "Please confirm your email first — check your inbox (and spam folder) for the link.";
+  if (/already registered/i.test(m)) return "There's already an account with that email. Try signing in instead.";
+  if (/row-level security|permission denied/i.test(m)) return "You don't have permission to do that.";
+  return m;
+}
+const here = () => location.origin + location.pathname;
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch {} }
+};
+
+/* ---------- setup check ---------- */
+if (!C.SUPABASE_URL || C.SUPABASE_URL.startsWith("PASTE") || !window.supabase){
+  show(false, h("div",{class:"card panel", style:"max-width:620px;margin:40px auto"},
+    h("h2",{text:"Almost there"}),
+    h("p",{text:"This site isn't connected to its database yet. Open index.html, find the SETTINGS block near the top, and paste in your Supabase Project URL and key (README.md walks you through it)."})));
+  return;
+}
+
+const sb = window.supabase.createClient(C.SUPABASE_URL, C.SUPABASE_KEY);
+let session = null, me = null, recovering = false;
+
+/* chat state shared across pages */
+const S = { ready:false, rooms:[], reads:{}, unread:new Set(), dmsEnabled:true, people:{}, works:{}, live:null, liveStatus:"" };
+/* the chat view currently on screen (if any) */
+let V = null;
+
+function resetChat(){
+  if (S.live){ sb.removeChannel(S.live); }
+  Object.assign(S, { ready:false, rooms:[], reads:{}, unread:new Set(), dmsEnabled:true, people:{}, works:{}, live:null, liveStatus:"" });
+  V = null;
+}
+
+/* ---------- boot & routing ---------- */
+async function boot(){
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  sb.auth.onAuthStateChange((event, s) => {
+    const changedUser = (s?.user?.id || null) !== (session?.user?.id || null);
+    session = s;
+    if (event === "PASSWORD_RECOVERY"){ recovering = true; setTimeout(renderNewPassword, 0); return; }
+    if (changedUser){ me = null; resetChat(); setTimeout(route, 0); }
+  });
+  window.addEventListener("hashchange", route);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && V && V.room) markRead(V.room.id, V.latest); });
+  route();
+}
+
+async function loadMe(){
+  for (let i = 0; i < 4; i++){
+    const { data, error } = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+    if (error) throw error;
+    if (data) return data;
+    await new Promise(r => setTimeout(r, 600));
+  }
+  throw new Error("Couldn't find your profile. Please refresh the page.");
+}
+
+async function route(){
+  if (recovering) return;
+  V = null;
+  if (!session){ topEl.hidden = true; return renderAuth(); }
+  try { if (!me) me = await loadMe(); }
+  catch(e){ return show(false, h("div",{class:"msg err", text:friendly(e)})); }
+  if (!me.approved){ renderHeader(); return renderPending(); }
+
+  const [page, id] = location.hash.replace(/^#\/?/,"").split("/");
+  try{
+    await initChat();
+    renderHeader();
+    if (page === "work" && id) return await renderWork(id);
+    if (page === "essays") return await renderLibrary(false);
+    if (page === "mine") return await renderLibrary(true);
+    if (page === "new") return renderEditor(null);
+    if (page === "edit" && id) return await renderEditor(id);
+    if (page === "teacher" && me.role === "teacher") return await renderTeacher();
+    if (page === "account") return renderAccount();
+    return await renderChat(page === "chat" ? id : null);
+  } catch(e){
+    show(false, h("div",{class:"msg err", text:friendly(e)}));
+  }
+}
+
+function renderHeader(){
+  topEl.hidden = false;
+  const page = location.hash.replace(/^#\/?/,"").split("/")[0] || "chat";
+  const link = (href, label, keys, dot) => h("a",{href, class: keys.includes(page) ? "on" : null}, label, dot ? h("span",{class:"dot", title:"New messages"}) : null);
+  topEl.replaceChildren(h("div",{class:"wrap"},
+    h("a",{class:"brand", href:"#/chat"}, C.CLASS_NAME, h("small",{text:C.TAGLINE || ""})),
+    me.approved ? h("nav",{class:"main"},
+      link("#/chat","Chat",["chat"], S.unread.size > 0),
+      link("#/essays","Essays",["essays","work","edit"]),
+      link("#/mine","My Work",["mine"]),
+      link("#/new","Share an Essay",["new"]),
+      me.role === "teacher" ? link("#/teacher","Teacher",["teacher"]) : null
+    ) : h("nav",{class:"main"}),
+    h("div",{class:"who"},
+      h("a",{href:"#/account", text: me.display_name, style:"color:inherit"}),
+      h("button",{class:"btn small", text:"Sign out", onclick: async () => { await sb.auth.signOut(); location.hash = ""; }})
+    )
+  ));
+}
+
+/* ---------- sign in / create account ---------- */
+function renderAuth(mode = "signin"){
+  const msg = h("div",{class:"msg err"});
+  const okMsg = h("div",{class:"msg ok"});
+  const name = h("input",{type:"text", placeholder:"First name and last initial, e.g. Rupert Psmith", autocomplete:"name", maxlength:"60"});
+  const email = h("input",{type:"email", placeholder:"you@gmail.com or you@proton.me", autocomplete:"email", required:true});
+  const pw = h("input",{type:"password", placeholder: mode === "signup" ? "At least 8 characters" : "Password", autocomplete: mode === "signup" ? "new-password" : "current-password", required:true, minlength:"8"});
+  const submit = h("button",{class:"btn primary full-btn", type:"submit", text: mode === "signup" ? "Create account" : "Sign in"});
+
+  const form = h("form",{onsubmit: async (ev) => {
+    ev.preventDefault(); msg.textContent = ""; okMsg.textContent = "";
+    submit.disabled = true;
+    try{
+      if (mode === "signup"){
+        if (!name.value.trim()) throw new Error("Please enter your name so classmates know who's who.");
+        const { data, error } = await sb.auth.signUp({
+          email: email.value.trim(), password: pw.value,
+          options:{ data:{ display_name: name.value.trim() }, emailRedirectTo: here() }
+        });
+        if (error) throw error;
+        if (!data.session) okMsg.textContent = "Account created! Check your email for a confirmation link, then come back and sign in.";
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pw.value });
+        if (error) throw error;
+      }
+    } catch(e){ msg.textContent = friendly(e); }
+    submit.disabled = false;
+  }},
+    mode === "signup" ? [h("label",{text:"Your name"}), name] : null,
+    h("label",{text:"Email"}), email,
+    h("div",{class:"hint", text:"Any email works — Gmail, Proton Mail, or a school address."}),
+    h("label",{text:"Password"}), pw,
+    msg, okMsg, submit
+  );
+
+  const forgot = mode === "signin" ? h("p",{style:"text-align:center;margin:16px 0 0"},
+    h("button",{class:"linkbtn", type:"button", text:"Forgot password?", onclick: async () => {
+      msg.textContent = ""; okMsg.textContent = "";
+      if (!email.value.trim()){ msg.textContent = "Type your email above first, then click “Forgot password?”."; return; }
+      const { error } = await sb.auth.resetPasswordForEmail(email.value.trim(), { redirectTo: here() });
+      if (error) msg.textContent = friendly(error);
+      else okMsg.textContent = "If that email has an account, a reset link is on its way.";
+    }})) : null;
+
+  const google = C.GOOGLE_SIGNIN ? [
+    h("div",{class:"or", text:"or"}),
+    h("button",{class:"btn gbtn", type:"button", onclick: async () => {
+      const { error } = await sb.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: here() } });
+      if (error) msg.textContent = friendly(error);
+    }}, googleIcon(), "Continue with Google")
+  ] : null;
+
+  show(false, h("div",{class:"auth"},
+    h("div",{class:"hero"}, h("h1",{text:C.CLASS_NAME}), h("p",{class:"muted", text:C.TAGLINE || ""})),
+    h("div",{class:"card panel"},
+      h("div",{class:"tabs"},
+        h("button",{class: mode === "signin" ? "on" : null, text:"Sign in", onclick:() => renderAuth("signin")}),
+        h("button",{class: mode === "signup" ? "on" : null, text:"Create account", onclick:() => renderAuth("signup")})),
+      form, forgot, google),
+    h("p",{class:"hint", style:"text-align:center;margin-top:18px", text:"New accounts are approved by the teacher before they can chat or read essays."})
+  ));
+}
+
+function googleIcon(){
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns,"svg"); svg.setAttribute("viewBox","0 0 48 48"); svg.setAttribute("width","18"); svg.setAttribute("height","18");
+  [["#EA4335","M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"],
+   ["#4285F4","M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"],
+   ["#FBBC05","M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.6 10.7l7.9-6.1z"],
+   ["#34A853","M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.1-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"]]
+   .forEach(([f,d]) => { const p = document.createElementNS(ns,"path"); p.setAttribute("fill",f); p.setAttribute("d",d); svg.append(p); });
+  return svg;
+}
+
+function renderNewPassword(){
+  topEl.hidden = true;
+  const msg = h("div",{class:"msg err"});
+  const pw = h("input",{type:"password", minlength:"8", autocomplete:"new-password", placeholder:"At least 8 characters", required:true});
+  show(false, h("div",{class:"auth"}, h("div",{class:"card panel"},
+    h("h2",{text:"Choose a new password"}),
+    h("form",{onsubmit: async (ev) => {
+      ev.preventDefault(); msg.textContent = "";
+      const { error } = await sb.auth.updateUser({ password: pw.value });
+      if (error){ msg.textContent = friendly(error); return; }
+      recovering = false; location.hash = ""; route();
+    }}, h("label",{text:"New password"}), pw, msg,
+       h("button",{class:"btn primary full-btn", type:"submit", text:"Save password"})))));
+}
+
+function renderPending(){
+  show(false, h("div",{class:"card panel", style:"max-width:560px;margin:40px auto;text-align:center"},
+    h("h2",{text:`Welcome, ${me.display_name}!`}),
+    h("p",{text:"Your account is waiting for your teacher's approval. Once you're approved you'll be able to chat with the class and read and share essays."}),
+    h("button",{class:"btn primary", text:"Check again", onclick: async () => { me = null; route(); }})
+  ));
+}
+
+/* =====================================================================
+   CHAT — data
+   ===================================================================== */
+async function initChat(){
+  if (S.ready) return;
+  const [ppl, settings, reads] = await Promise.all([
+    sb.from("profiles").select("id,display_name,approved,role"),
+    sb.from("chat_settings").select("dms_enabled").eq("id",1).maybeSingle(),
+    sb.from("room_reads").select("room_id,last_read_at")
+  ]);
+  if (ppl.error) throw ppl.error;
+  ppl.data.forEach(p => { S.people[p.id] = p; });
+  S.dmsEnabled = settings.data ? settings.data.dms_enabled : true;
+  (reads.data || []).forEach(r => { S.reads[r.room_id] = r.last_read_at; });
+  await loadRooms();
+
+  S.live = sb.channel("live-" + me.id)
+    .on("postgres_changes",{event:"INSERT", schema:"public", table:"messages"}, p => onNewMessage(p.new))
+    .on("postgres_changes",{event:"DELETE", schema:"public", table:"messages"}, p => onDeletedMessage(p.old))
+    .on("postgres_changes",{event:"INSERT", schema:"public", table:"rooms"}, () => loadRooms().then(refreshChrome))
+    .on("postgres_changes",{event:"DELETE", schema:"public", table:"rooms"}, () => loadRooms().then(onRoomsRemoved))
+    .on("postgres_changes",{event:"*", schema:"public", table:"room_members"}, () => loadRooms().then(onRoomsRemoved))
+    .subscribe(st => {
+      S.liveStatus = st;
+      if (V && V.status) V.status.textContent = statusText();
+    });
+  S.ready = true;
+}
+function statusText(){
+  const st = S.liveStatus;
+  if (st === "SUBSCRIBED") return "";
+  if (st === "CHANNEL_ERROR" || st === "TIMED_OUT" || st === "CLOSED") return "Live updates paused — refresh the page";
+  return "Connecting…";
+}
+const ts = s => (s ? new Date(s).getTime() : 0);
+
+async function loadRooms(){
+  const { data, error } = await sb.from("rooms").select("id,kind,name,created_by,last_message_at,room_members(user_id)");
+  if (error) throw error;
+  S.rooms = data || [];
+  S.unread = new Set(S.rooms.filter(r =>
+    inMySidebar(r) && r.last_message_at && ts(r.last_message_at) > ts(S.reads[r.id]) && !(V && V.room && V.room.id === r.id)
+  ).map(r => r.id));
+}
+const isMember = r => (r.room_members || []).some(m => m.user_id === me.id);
+const inMySidebar = r => r.kind === "space" || isMember(r);
+const canPost = r => r.kind === "space" || (isMember(r) && S.dmsEnabled);
+function personName(id){ return S.people[id]?.display_name || "Someone"; }
+const memberIds = r => (r.room_members || []).map(m => m.user_id);
+function roomTitle(r){
+  if (r.kind === "space") return r.name;
+  if (r.kind === "group" && r.name) return r.name;
+  const ids = memberIds(r);
+  const others = isMember(r) ? ids.filter(id => id !== me.id) : ids;
+  const names = others.map(personName).sort();
+  if (r.kind === "dm") return isMember(r) ? (names[0] || "Someone") : names.join(" & ");
+  return names.length > 3 ? `${names.slice(0,3).join(", ")} +${names.length - 3}` : (names.join(", ") || "Group chat");
+}
+function roomIcon(r){
+  if (r.kind === "space") return "#";
+  if (r.kind === "group") return r.name ? initials(r.name) : String(memberIds(r).length);
+  return initials(roomTitle(r));
+}
+function defaultRoom(){
+  const spaces = S.rooms.filter(r => r.kind === "space");
+  return spaces.find(r => !r.created_by && r.name === "General") || spaces[0] || null;
+}
+
+let readTimer = null;
+function markRead(roomId, latest){
+  if (!roomId || document.hidden) return;
+  const at = latest || new Date().toISOString();
+  if (ts(at) <= ts(S.reads[roomId])) { S.unread.delete(roomId); return; }
+  S.reads[roomId] = at;
+  S.unread.delete(roomId);
+  refreshChrome();
+  clearTimeout(readTimer);
+  readTimer = setTimeout(() => {
+    sb.from("room_reads").upsert({ user_id: me.id, room_id: roomId, last_read_at: S.reads[roomId] }, { onConflict:"user_id,room_id" }).then(() => {});
+  }, 800);
+}
+
+function refreshChrome(){
+  document.title = (S.unread.size ? `(${S.unread.size}) ` : "") + BASE_TITLE;
+  if (!topEl.hidden && me && me.approved) renderHeader();
+  if (V && V.side && V.side.isConnected) V.side.replaceWith(V.side = buildSidebar());
+}
+
+async function onNewMessage(m){
+  let r = S.rooms.find(x => x.id === m.room_id);
+  if (!r){ await loadRooms(); r = S.rooms.find(x => x.id === m.room_id); if (!r) return; }
+  r.last_message_at = m.created_at;
+  if (V && V.room && V.room.id === m.room_id && V.list && V.list.isConnected){
+    await V.append(m);
+  } else if (m.author_id !== me.id && inMySidebar(r)){
+    S.unread.add(r.id);
+  }
+  refreshChrome();
+}
+function onDeletedMessage(old){
+  if (!old || old.id == null || !V || !V.list) return;
+  V.list.querySelector(`[data-id="${Number(old.id)}"]`)?.remove();
+}
+function onRoomsRemoved(){
+  if (V && V.room && !S.rooms.some(r => r.id === V.room.id)) { location.hash = "#/chat"; return; }
+  refreshChrome();
+}
+
+async function ensureWorks(ids){
+  const missing = [...new Set(ids.filter(Boolean))].filter(id => !(id in S.works));
+  if (!missing.length) return;
+  const { data } = await sb.from("works").select("id,title,kind,author_id").in("id", missing);
+  (data || []).forEach(w => { S.works[w.id] = w; });
+  missing.forEach(id => { if (!(id in S.works)) S.works[id] = null; });
+}
+async function ensurePeople(ids){
+  const missing = [...new Set(ids)].filter(id => !(id in S.people));
+  if (!missing.length) return;
+  const { data } = await sb.from("profiles").select("id,display_name,approved,role").in("id", missing);
+  (data || []).forEach(p => { S.people[p.id] = p; });
+}
+
+/* =====================================================================
+   CHAT — screens
+   ===================================================================== */
+function buildSidebar(){
+  const cur = V && V.room ? V.room.id : (V && V.newDm ? "new" : null);
+  const roomLink = (r) => h("a",{href:`#/chat/${r.id}`, class:["room", cur === r.id ? "on" : "", S.unread.has(r.id) ? "unread" : ""].join(" ")},
+    h("span",{class:"ic" + (r.kind === "group" ? " grp" : ""), text: roomIcon(r)}),
+    h("span",{class:"nm", text: roomTitle(r)}),
+    S.unread.has(r.id) ? h("span",{class:"dot"}) : null);
+
+  const spaces = S.rooms.filter(r => r.kind === "space")
+    .sort((a,b) => (a.created_by ? 1 : 0) - (b.created_by ? 1 : 0) || a.name.localeCompare(b.name));
+  const dms = S.rooms.filter(r => r.kind !== "space" && isMember(r))
+    .sort((a,b) => ts(b.last_message_at) - ts(a.last_message_at));
+
+  const newSpaceRow = h("div",{class:"inl", hidden:true});
+  const spaceInput = h("input",{type:"text", maxlength:"40", placeholder:"Space name"});
+  newSpaceRow.append(spaceInput, h("button",{class:"btn small primary", text:"Add", onclick: createSpace}));
+  spaceInput.addEventListener("keydown", e => { if (e.key === "Enter") createSpace(); if (e.key === "Escape") newSpaceRow.hidden = true; });
+  async function createSpace(){
+    const n = spaceInput.value.trim(); if (!n) return;
+    const { data, error } = await sb.rpc("create_space", { space_name: n });
+    if (error) return alert(friendly(error));
+    await loadRooms(); location.hash = `#/chat/${data}`;
+  }
+
+  return h("aside",{class:"side"},
+    h("h4",{}, "Spaces", h("button",{title:"New space", "aria-label":"New space", text:"+", onclick:() => { newSpaceRow.hidden = !newSpaceRow.hidden; if (!newSpaceRow.hidden) spaceInput.focus(); }})),
+    newSpaceRow,
+    spaces.map(roomLink),
+    h("h4",{}, "Chats", S.dmsEnabled ? h("a",{href:"#/chat/new", class:"plus", title:"New chat", "aria-label":"New chat", text:"+"}) : null),
+    S.dmsEnabled ? h("a",{href:"#/chat/new", class:"room newchat" + (cur === "new" ? " on" : "")}, h("span",{class:"ic", text:"+"}), h("span",{class:"nm", text:"New chat"})) : null,
+    dms.length ? dms.map(roomLink) : h("div",{class:"empty-dm", text: S.dmsEnabled ? "Message one classmate or start a group chat." : "Private chats are turned off."})
+  );
+}
+
+async function renderChat(roomId){
+  if (roomId === "new") return renderNewChat();
+  let room = roomId ? S.rooms.find(r => r.id === roomId) : null;
+  if (!roomId){
+    const last = store.get("lastRoom:" + me.id);
+    room = S.rooms.find(r => r.id === last && inMySidebar(r)) || defaultRoom();
+    if (room) { history.replaceState(null, "", `#/chat/${room.id}`); renderHeader(); }
+  }
+  V = { room, list:null, side:null, status:null, latest:null, limit:PAGE, seen:new Set(), lastDay:null, attach:null };
+  const view = V;
+
+  if (!room){
+    V.side = buildSidebar();
+    return show(true, h("div",{class:"card chatapp"}, V.side,
+      h("div",{class:"pane"}, h("div",{class:"empty"}, h("h2",{text: roomId ? "That conversation isn't available" : "No spaces yet"}), h("p",{class:"muted", text:"Pick one on the left, or start a new space with +."})))));
+  }
+  if (inMySidebar(room)) store.set("lastRoom:" + me.id, room.id);
+
+  /* header */
+  let sub;
+  const n = memberIds(room).length;
+  if (room.kind === "space") sub = "Everyone in the class";
+  else if (!isMember(room)) sub = `Teacher view of a private ${room.kind === "group" ? `group chat (${n} people)` : "conversation"}`;
+  else if (room.kind === "group") sub = `Group chat · ${n} people · the teacher can read private chats`;
+  else sub = "Private conversation · the teacher can read private chats";
+  const membersSlot = h("div");
+  const membersBtn = (room.kind === "group") ? h("button",{class:"btn small", text:`👥 ${n}`, title:"Members", onclick: () => {
+      if (membersSlot.firstChild) membersSlot.replaceChildren(); else membersSlot.replaceChildren(groupPanel(room, () => membersSlot.replaceChildren()));
+    }}) : null;
+  const delSpace = (me.role === "teacher" && room.kind === "space" && room.created_by)
+    ? h("button",{class:"btn small danger", text:"Delete space", onclick: async () => {
+        if (!confirm(`Delete the space “${room.name}” and all its messages? This can't be undone.`)) return;
+        const { error } = await sb.from("rooms").delete().eq("id", room.id);
+        if (error) return alert(friendly(error));
+        await loadRooms(); location.hash = "#/chat";
+      }}) : null;
+  V.status = h("span",{class:"status", text:statusText()});
+  const head = h("div",{class:"panehead"},
+    h("div",{class:"grow"}, h("h2",{text:(room.kind === "space" ? "# " : "") + roomTitle(room)}), h("div",{class:"sub", text:sub})),
+    V.status, membersBtn, delSpace);
+
+  /* messages */
+  const list = V.list = h("div",{class:"chatlist", "aria-live":"polite"});
+  const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 140;
+  const toBottom = () => { list.scrollTop = list.scrollHeight; };
+
+  function dayLabel(d){
+    const today = new Date(); const y = new Date(); y.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return "Today";
+    if (d.toDateString() === y.toDateString()) return "Yesterday";
+    return d.toLocaleDateString(undefined,{weekday:"long", month:"short", day:"numeric"});
+  }
+  function workCard(id){
+    const w = S.works[id];
+    if (!w) return h("div",{class:"wcard gone", text:"Shared essay (no longer available)"});
+    return h("a",{class:"wcard", href:`#/work/${w.id}`},
+      h("span",{class:"tag", text:w.kind}),
+      h("div",{class:"t", text:w.title}),
+      h("div",{class:"s", text:`by ${personName(w.author_id)} · Read →`}));
+  }
+  function msgNode(m){
+    const mine = m.author_id === me.id;
+    const d = new Date(m.created_at);
+    const time = d.toLocaleTimeString(undefined,{hour:"numeric", minute:"2-digit"});
+    const node = h("div",{class: mine ? "m mine" : "m", "data-id": String(m.id)});
+    const del = (mine || me.role === "teacher") ? h("button",{class:"linkbtn del", type:"button", text:"delete", onclick: async () => {
+      if (!confirm("Delete this message?")) return;
+      const { error } = await sb.from("messages").delete().eq("id", m.id);
+      if (error) alert(friendly(error)); else node.remove();
+    }}) : null;
+    node.append(...[
+      h("div",{class:"who2"}, mine ? null : h("b",{text:personName(m.author_id)}), time, del),
+      m.body ? h("div",{class:"bb", text:m.body}) : null,
+      m.work_id ? workCard(m.work_id) : (m.body ? null : h("div",{class:"wcard gone", text:"Shared essay (no longer available)"}))
+    ].filter(Boolean));
+    return node;
+  }
+  function place(m){
+    if (view.seen.has(m.id)) return false;
+    view.seen.add(m.id);
+    list.querySelector(".empty-note")?.remove();
+    const d = new Date(m.created_at);
+    if (d.toDateString() !== view.lastDay){ view.lastDay = d.toDateString(); list.append(h("div",{class:"day", text:dayLabel(d)})); }
+    list.append(msgNode(m));
+    if (ts(m.created_at) > ts(view.latest)) view.latest = m.created_at;
+    return true;
+  }
+  V.append = async (m) => {
+    if (V !== view) return;
+    const stick = nearBottom() || m.author_id === me.id;
+    await Promise.all([ensureWorks([m.work_id]), ensurePeople([m.author_id])]);
+    if (place(m) && stick) toBottom();
+    markRead(room.id, view.latest);
+  };
+
+  async function load(keepFromBottom){
+    const { data, error } = await sb.from("messages").select("id,room_id,author_id,body,work_id,created_at")
+      .eq("room_id", room.id).order("created_at",{ascending:false}).limit(view.limit);
+    if (error) throw error;
+    const msgs = data.reverse();
+    await Promise.all([ensureWorks(msgs.map(m => m.work_id)), ensurePeople(msgs.map(m => m.author_id))]);
+    if (V !== view) return;
+    const fromBottom = list.scrollHeight - list.scrollTop;
+    list.replaceChildren(); view.seen.clear(); view.lastDay = null;
+    if (data.length === view.limit) list.append(h("button",{class:"btn small more", text:"Load earlier messages", onclick: () => { view.limit += PAGE; load(true); }}));
+    if (!msgs.length) list.append(h("div",{class:"day empty-note", text: room.kind === "space" ? "No messages yet. Say hello!" : "Start the conversation."}));
+    msgs.forEach(place);
+    if (keepFromBottom) list.scrollTop = list.scrollHeight - fromBottom; else toBottom();
+    markRead(room.id, view.latest);
+  }
+
+  /* composer */
+  let composer;
+  if (canPost(room)){
+    const box = h("textarea",{placeholder:`Message ${room.kind === "space" ? "#" + room.name : roomTitle(room)}…`, maxlength:"1000", rows:"1"});
+    const sendBtn = h("button",{class:"btn primary", type:"submit", text:"Send"});
+    const err = h("div",{class:"msg err", style:"margin:0 0 8px"});
+    const chipSlot = h("div");
+    const pickerSlot = h("div");
+    const grow = () => { box.style.height = "44px"; box.style.height = Math.min(box.scrollHeight + 2, 140) + "px"; };
+    box.addEventListener("input", grow);
+    box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); form.requestSubmit(); } });
+
+    const drawChip = () => {
+      const w = view.attach && S.works[view.attach];
+      chipSlot.replaceChildren(w ? h("span",{class:"chip"}, `📄 ${w.title}`, h("button",{type:"button", "aria-label":"Remove essay", text:"×", onclick:() => { view.attach = null; drawChip(); }})) : "");
+    };
+    const essayBtn = h("button",{class:"btn", type:"button", title:"Share an essay", text:"📄 Essay", onclick: async () => {
+      if (pickerSlot.firstChild){ pickerSlot.replaceChildren(); return; }
+      pickerSlot.replaceChildren(await buildEssayPicker(id => { view.attach = id; drawChip(); pickerSlot.replaceChildren(); box.focus(); },
+                                                         () => pickerSlot.replaceChildren()));
+    }});
+
+    const form = h("form",{onsubmit: async (ev) => {
+      ev.preventDefault(); err.textContent = "";
+      const text = box.value.trim();
+      if (!text && !view.attach) return;
+      sendBtn.disabled = true;
+      const { data: row, error } = await sb.from("messages")
+        .insert({ room_id: room.id, body: text || null, work_id: view.attach || null })
+        .select("id,room_id,author_id,body,work_id,created_at").single();
+      sendBtn.disabled = false;
+      if (error){ err.textContent = friendly(error); return; }
+      box.value = ""; grow(); view.attach = null; drawChip();
+      room.last_message_at = row.created_at;
+      await view.append(row); toBottom(); box.focus();
+    }}, h("div",{class:"rowc"}, essayBtn, box, sendBtn));
+    composer = h("div",{class:"composer"}, pickerSlot, err, chipSlot, form);
+    setTimeout(() => box.focus(), 0);
+  } else {
+    composer = h("div",{class:"readonly", text: room.kind !== "space" && isMember(room)
+      ? "Private chats are turned off by the teacher. You can still read this conversation."
+      : "You're viewing this conversation as the teacher."});
+  }
+
+  V.side = buildSidebar();
+  show(true, h("div",{class:"card chatapp"}, V.side, h("div",{class:"pane"}, head, membersSlot, list, composer)));
+  list.append(h("div",{class:"loading", text:"Loading messages…"}));
+  await load(false);
+}
+
+async function buildEssayPicker(onPick, onClose){
+  const { data, error } = await sb.from("works").select("id,title,kind,author_id,created_at").order("created_at",{ascending:false}).limit(300);
+  if (error) return h("div",{class:"msg err", text:friendly(error)});
+  data.forEach(w => { S.works[w.id] = w; });
+  const q = h("input",{type:"search", placeholder:"Find an essay by title or author…"});
+  const lst = h("div",{class:"lst"});
+  const draw = () => {
+    const s = q.value.trim().toLowerCase();
+    const mine = data.filter(w => w.author_id === me.id), rest = data.filter(w => w.author_id !== me.id);
+    const rows = [...mine, ...rest].filter(w => !s || w.title.toLowerCase().includes(s) || personName(w.author_id).toLowerCase().includes(s));
+    lst.replaceChildren(...(rows.length ? rows.slice(0,60).map(w => h("button",{class:"it", type:"button", onclick:() => onPick(w.id)},
+      w.title, h("small",{text:`${w.kind} · ${w.author_id === me.id ? "you" : personName(w.author_id)}`})))
+      : [h("div",{class:"it muted", text: data.length ? "No matches." : "No essays yet. Share one from “Share an Essay”."})]));
+  };
+  q.addEventListener("input", draw);
+  q.addEventListener("keydown", e => { if (e.key === "Escape") onClose(); });
+  draw();
+  const p = h("div",{class:"picker"}, q, lst);
+  setTimeout(() => q.focus(), 0);
+  return p;
+}
+
+/* people picker shared by "New chat" and "Add people" */
+function peoplePicker(exclude, onChange){
+  const chosen = new Set();
+  const q = h("input",{type:"search", placeholder:"Search classmates…"});
+  const lst = h("div",{class:"plist"});
+  const ppl = Object.values(S.people).filter(p => p.approved && p.id !== me.id && !exclude.includes(p.id))
+    .sort((a,b) => a.display_name.localeCompare(b.display_name));
+  const draw = () => {
+    const s = q.value.trim().toLowerCase();
+    const rows = ppl.filter(p => !s || p.display_name.toLowerCase().includes(s));
+    lst.replaceChildren(...(rows.length ? rows.map(p => {
+      const cb = h("input",{type:"checkbox", checked: chosen.has(p.id)});
+      cb.addEventListener("change", () => { cb.checked ? chosen.add(p.id) : chosen.delete(p.id); onChange([...chosen]); });
+      return h("label",{class:"person"}, cb, h("span",{class:"ic", text:initials(p.display_name)}),
+        h("span",{}, p.display_name, p.role === "teacher" ? h("span",{class:"muted", text:" · Teacher"}) : null));
+    }) : [h("p",{class:"muted", text: ppl.length ? "No classmates match." : "Everyone is already here."})]));
+  };
+  q.addEventListener("input", draw); draw();
+  return { el: h("div",{}, q, lst), focus: () => q.focus() };
+}
+
+function renderNewChat(){
+  V = { room:null, newDm:true, side:null };
+  if (!S.dmsEnabled){ location.hash = "#/chat"; return; }
+  const err = h("div",{class:"msg err"});
+  const nameRow = h("div",{hidden:true}, h("label",{text:"Group name (optional)"}));
+  const nameInput = h("input",{type:"text", maxlength:"60", placeholder:"e.g. Hatchet project team"});
+  nameRow.append(nameInput);
+  const go = h("button",{class:"btn primary", text:"Pick someone to chat with", disabled:true});
+  let picked = [];
+  const pick = peoplePicker([], ids => {
+    picked = ids;
+    nameRow.hidden = ids.length < 2;
+    go.disabled = ids.length === 0;
+    go.textContent = ids.length === 0 ? "Pick someone to chat with"
+      : ids.length === 1 ? `Chat with ${personName(ids[0])}`
+      : `Start group chat (${ids.length + 1} people)`;
+  });
+  go.addEventListener("click", async () => {
+    err.textContent = ""; go.disabled = true;
+    const { data, error } = picked.length === 1
+      ? await sb.rpc("open_dm", { other: picked[0] })
+      : await sb.rpc("create_group", { member_ids: picked, group_name: nameInput.value.trim() || null });
+    if (error){ err.textContent = friendly(error); go.disabled = false; return; }
+    await loadRooms(); location.hash = `#/chat/${data}`;
+  });
+  V.side = buildSidebar();
+  show(true, h("div",{class:"card chatapp"}, V.side, h("div",{class:"pane"},
+    h("div",{class:"panehead"}, h("div",{class:"grow"}, h("h2",{text:"New chat"}),
+      h("div",{class:"sub", text:"Pick one classmate for a direct message, or several for a group chat. The teacher can read private chats."}))),
+    h("div",{class:"people"}, pick.el, nameRow, err, h("div",{class:"gobar"}, go)))));
+  pick.focus();
+}
+
+/* members panel for a group chat */
+function groupPanel(room, close){
+  const err = h("div",{class:"msg err"});
+  const box = h("div",{class:"gpanel"});
+  const ids = memberIds(room);
+  const mine = isMember(room);
+  const list = h("div",{class:"gmembers"}, ids.map(personName).sort().map(n => h("span",{class:"chip", text:n})));
+  const parts = [h("div",{class:"gtitle"}, h("strong",{text:`Members (${ids.length})`}), h("button",{class:"linkbtn", type:"button", text:"close", onclick:close})), list];
+
+  if (mine && S.dmsEnabled){
+    const nameIn = h("input",{type:"text", maxlength:"60", placeholder:"Group name (leave blank to show names)", value: room.name || ""});
+    parts.push(h("div",{class:"grow-row"}, nameIn, h("button",{class:"btn small", text:"Rename", onclick: async () => {
+      const { error } = await sb.rpc("rename_group", { r: room.id, new_name: nameIn.value.trim() });
+      if (error) return (err.textContent = friendly(error));
+      await loadRooms(); route();
+    }})));
+    let adding = [];
+    const addBtn = h("button",{class:"btn small primary", text:"Add", disabled:true, onclick: async () => {
+      const { error } = await sb.rpc("add_group_members", { r: room.id, member_ids: adding });
+      if (error) return (err.textContent = friendly(error));
+      await loadRooms(); route();
+    }});
+    const picker = peoplePicker(ids, sel => { adding = sel; addBtn.disabled = !sel.length; addBtn.textContent = sel.length ? `Add ${sel.length}` : "Add"; });
+    const addWrap = h("div",{hidden:true}, picker.el, h("div",{class:"gobar"}, addBtn));
+    parts.push(h("div",{class:"gactions"},
+      h("button",{class:"btn small", text:"+ Add people", onclick: () => { addWrap.hidden = !addWrap.hidden; if (!addWrap.hidden) picker.focus(); }}),
+      h("button",{class:"btn small danger", text:"Leave group", onclick: async () => {
+        if (!confirm(`Leave “${roomTitle(room)}”? You won't see its messages anymore unless someone adds you back.`)) return;
+        const { error } = await sb.rpc("leave_group", { r: room.id });
+        if (error) return (err.textContent = friendly(error));
+        await loadRooms(); location.hash = "#/chat";
+      }})), addWrap);
+  } else if (mine){
+    parts.push(h("button",{class:"btn small danger", text:"Leave group", onclick: async () => {
+      if (!confirm(`Leave “${roomTitle(room)}”?`)) return;
+      const { error } = await sb.rpc("leave_group", { r: room.id });
+      if (error) return (err.textContent = friendly(error));
+      await loadRooms(); location.hash = "#/chat";
+    }}));
+  }
+  parts.push(err);
+  box.append(...parts);
+  return box;
+}
+
+/* =====================================================================
+   ESSAYS
+   ===================================================================== */
+async function renderLibrary(mineOnly){
+  show(false, h("div",{class:"loading", text:"Loading essays…"}));
+  let q = sb.from("works").select("id,title,kind,body,file_name,created_at,author_id,profiles(display_name)").order("created_at",{ascending:false});
+  if (mineOnly) q = q.eq("author_id", me.id);
+  const { data: works, error } = await q;
+  if (error) throw error;
+
+  const search = h("input",{type:"search", placeholder:"Search titles and authors…"});
+  const kindSel = h("select",{}, h("option",{value:"", text:"All types"}), KINDS.map(k => h("option",{value:k, text:k})));
+  const authors = [...new Map(works.map(w => [w.author_id, w.profiles?.display_name || "Unknown"])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+  const authSel = h("select",{}, h("option",{value:"", text:"All students"}), authors.map(([id,n]) => h("option",{value:id, text:n})));
+  const grid = h("div",{class:"grid"});
+
+  function draw(){
+    const s = search.value.trim().toLowerCase();
+    const list = works.filter(w =>
+      (!kindSel.value || w.kind === kindSel.value) &&
+      (!authSel.value || w.author_id === authSel.value) &&
+      (!s || w.title.toLowerCase().includes(s) || (w.profiles?.display_name || "").toLowerCase().includes(s)));
+    if (!list.length){
+      grid.replaceChildren(h("div",{class:"empty card", style:"grid-column:1/-1"},
+        h("h2",{text: works.length ? "Nothing matches that search" : (mineOnly ? "You haven't shared anything yet" : "No essays yet — for now")}),
+        h("p",{class:"muted", text: works.length ? "Try a different word or clear the filters." : "Be the first to share an essay, poem or story."}),
+        works.length ? null : h("a",{class:"btn primary", href:"#/new", text:"Share an essay"})));
+      return;
+    }
+    grid.replaceChildren(...list.map(w => h("a",{class:"card work", href:`#/work/${w.id}`},
+      h("span",{class:"tag", text:w.kind}),
+      h("h3",{text:w.title}),
+      h("div",{class:"by", text:`${w.profiles?.display_name || "Unknown"} · ${fmtDate(w.created_at)}`}),
+      w.body ? h("p",{class:"ex", text:w.body.slice(0,400)}) : h("p",{class:"ex muted", text:`📎 ${w.file_name || "Attached file"}`})
+    )));
+  }
+  [search, kindSel, authSel].forEach(e => e.addEventListener("input", draw));
+
+  show(false,
+    h("div",{class:"libhead"},
+      h("div",{}, h("h1",{text: mineOnly ? "My Work" : "Essays"}),
+        h("p",{class:"muted", style:"margin:0", text: `${works.length} piece${works.length === 1 ? "" : "s"} ${mineOnly ? "shared by you" : "from the class"}`})),
+      h("a",{class:"btn primary", href:"#/new", text:"+ Share an essay"})),
+    h("div",{class:"filters"}, search, kindSel, mineOnly ? null : authSel),
+    grid);
+  draw();
+}
+
+async function renderWork(id){
+  show(false, h("div",{class:"loading", text:"Opening…"}));
+  const { data: w, error } = await sb.from("works").select("*, profiles(display_name)").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!w) return show(false, h("div",{class:"empty"}, h("h2",{text:"That piece isn't here anymore"}), h("a",{href:"#/essays", text:"Back to essays"})));
+  S.works[w.id] = { id:w.id, title:w.title, kind:w.kind, author_id:w.author_id };
+
+  const prose = h("div",{class:"prose"});
+  (w.body || "").split(/\n\s*\n/).map(s => s.trim()).filter(Boolean).forEach(para => {
+    const p = h("p");
+    para.split("\n").forEach((line,i) => { if (i) p.append(h("br")); p.append(document.createTextNode(line)); });
+    prose.append(p);
+  });
+
+  let attach = null;
+  if (w.file_path){
+    const { data: signed } = await sb.storage.from("works").createSignedUrl(w.file_path, 60*60);
+    const url = signed?.signedUrl;
+    const name = w.file_name || "file";
+    if (url && /\.(png|jpe?g|gif|webp)$/i.test(name)) attach = h("div",{class:"attach card"}, h("img",{src:url, alt:w.title}));
+    else if (url && /\.pdf$/i.test(name)) attach = h("div",{}, h("iframe",{class:"pdf", src:url, title:name}),
+      h("p",{class:"hint"}, h("a",{href:url, target:"_blank", rel:"noopener", text:`Open ${name} in a new tab`})));
+    else if (url) attach = h("div",{class:"attach card"}, h("span",{text:`📎 ${name}`}),
+      h("a",{class:"btn", href:url, target:"_blank", rel:"noopener", text:"Open / download"}));
+  }
+
+  /* share to chat */
+  const shareSlot = h("div");
+  const shareBtn = h("button",{class:"btn primary", text:"💬 Share to chat", onclick: () => {
+    if (shareSlot.firstChild){ shareSlot.replaceChildren(); return; }
+    const targets = S.rooms.filter(r => inMySidebar(r) && canPost(r))
+      .sort((a,b) => (a.kind === b.kind ? roomTitle(a).localeCompare(roomTitle(b)) : a.kind === "space" ? -1 : 1));
+    const sel = h("select",{}, targets.map(r => h("option",{value:r.id, text:(r.kind === "space" ? "# " : r.kind === "group" ? "👥 " : "@ ") + roomTitle(r)})));
+    const note = h("input",{type:"text", maxlength:"1000", placeholder:"Add a note (optional)"});
+    const go = h("button",{class:"btn primary", text:"Send", onclick: async () => {
+      go.disabled = true;
+      const { error } = await sb.from("messages").insert({ room_id: sel.value, body: note.value.trim() || null, work_id: w.id });
+      if (error){ go.disabled = false; return alert(friendly(error)); }
+      location.hash = `#/chat/${sel.value}`;
+    }});
+    shareSlot.replaceChildren(h("div",{class:"share"}, sel, note, go));
+    note.focus();
+  }});
+
+  const mine = w.author_id === me.id;
+  const canDelete = mine || me.role === "teacher";
+  const actions = h("div",{class:"actions"},
+    shareBtn,
+    mine ? h("a",{class:"btn", href:`#/edit/${w.id}`, text:"Edit"}) : null,
+    canDelete ? h("button",{class:"btn danger", text:"Delete", onclick: async () => {
+      if (!confirm(`Delete “${w.title}”? This can't be undone.`)) return;
+      if (w.file_path) await sb.storage.from("works").remove([w.file_path]);
+      const { error } = await sb.from("works").delete().eq("id", w.id);
+      if (error) alert(friendly(error)); else { S.works[w.id] = null; location.hash = mine ? "#/mine" : "#/essays"; }
+    }}) : null);
+
+  show(false, h("article",{class:"reader"},
+    h("a",{class:"back", href:"#/essays", text:"← All essays"}),
+    h("span",{class:"tag", text:w.kind}),
+    h("h1",{text:w.title}),
+    h("div",{class:"meta"}, h("strong",{style:"color:var(--ink)", text:w.profiles?.display_name || "Unknown"}), h("span",{text:"·"}), h("span",{text:fmtDate(w.created_at)}),
+      w.updated_at && (new Date(w.updated_at) - new Date(w.created_at) > 60000) ? h("span",{text:"· edited"}) : null),
+    prose, attach, actions, shareSlot));
+}
+
+async function renderEditor(id){
+  let w = null;
+  if (id){
+    const { data, error } = await sb.from("works").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    if (!data || data.author_id !== me.id) return show(false, h("div",{class:"msg err", text:"You can only edit your own work."}));
+    w = data;
+  }
+  const msg = h("div",{class:"msg err"});
+  const title = h("input",{type:"text", maxlength:"200", placeholder:"Give it a title", value: w?.title || ""});
+  const kind = h("select",{}, KINDS.map(k => h("option",{value:k, text:k, selected: (w?.kind || "Essay") === k})));
+  const body = h("textarea",{placeholder:"Type or paste your writing here…"}); body.value = w?.body || "";
+  const file = h("input",{type:"file", accept:".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp", hidden:true});
+  let removeFile = false;
+  const fileLabel = h("div",{});
+  const drawFile = () => {
+    const chosen = file.files[0];
+    if (chosen) fileLabel.replaceChildren(h("strong",{text:`📎 ${chosen.name}`}), " ", h("button",{class:"linkbtn", type:"button", text:"remove", onclick:(e)=>{ e.stopPropagation(); file.value=""; drawFile(); }}));
+    else if (w?.file_path && !removeFile) fileLabel.replaceChildren(h("strong",{text:`📎 ${w.file_name}`}), " ", h("button",{class:"linkbtn", type:"button", text:"remove", onclick:(e)=>{ e.stopPropagation(); removeFile = true; drawFile(); }}));
+    else fileLabel.replaceChildren(h("span",{text:"Drop a file here or "}), h("span",{class:"linkbtn", text:"choose one"}),
+      h("div",{class:"hint", text:"PDF, Word, text, or a photo of handwritten work · up to 10 MB"}));
+  };
+  file.addEventListener("change", () => { removeFile = false; drawFile(); });
+  const drop = h("div",{class:"drop", onclick:() => file.click(),
+    ondragover:(e)=>{ e.preventDefault(); drop.classList.add("over"); },
+    ondragleave:()=>drop.classList.remove("over"),
+    ondrop:(e)=>{ e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files.length){ file.files = e.dataTransfer.files; removeFile = false; drawFile(); } }
+  }, fileLabel, file);
+  drawFile();
+  const save = h("button",{class:"btn primary", type:"submit", text: w ? "Save changes" : "Share with the class"});
+
+  const form = h("form",{onsubmit: async (ev) => {
+    ev.preventDefault(); msg.textContent = "";
+    const chosen = file.files[0];
+    const keepsOldFile = w?.file_path && !removeFile && !chosen;
+    if (!title.value.trim()) { msg.textContent = "Please add a title."; return; }
+    if (!body.value.trim() && !chosen && !keepsOldFile) { msg.textContent = "Type your writing in the box or attach a file."; return; }
+    if (chosen && chosen.size > 10*1024*1024) { msg.textContent = "That file is over 10 MB — try a smaller one or a PDF."; return; }
+    save.disabled = true; save.textContent = "Saving…";
+    try{
+      const row = { title: title.value.trim(), kind: kind.value, body: body.value.trim() || null, updated_at: new Date().toISOString() };
+      if (chosen){
+        const safe = chosen.name.replace(/[^\w.\-]+/g,"_").slice(-80);
+        const path = `${me.id}/${crypto.randomUUID()}-${safe}`;
+        const { error: upErr } = await sb.storage.from("works").upload(path, chosen, { contentType: chosen.type || undefined });
+        if (upErr) throw upErr;
+        row.file_path = path; row.file_name = chosen.name;
+      } else if (removeFile){
+        row.file_path = null; row.file_name = null;
+      }
+      let savedId;
+      if (w){
+        const { error } = await sb.from("works").update(row).eq("id", w.id);
+        if (error) throw error;
+        if (w.file_path && (chosen || removeFile)) await sb.storage.from("works").remove([w.file_path]);
+        savedId = w.id;
+      } else {
+        const { data, error } = await sb.from("works").insert(row).select("id").single();
+        if (error) throw error;
+        savedId = data.id;
+      }
+      delete S.works[savedId];
+      location.hash = `#/work/${savedId}`;
+    } catch(e){
+      msg.textContent = friendly(e); save.disabled = false; save.textContent = w ? "Save changes" : "Share with the class";
+    }
+  }},
+    h("div",{class:"row"},
+      h("div",{}, h("label",{text:"Title"}), title),
+      h("div",{}, h("label",{text:"Type"}), kind)),
+    h("label",{text:"Your writing"}), body,
+    h("div",{class:"hint", text:"Leave a blank line between paragraphs."}),
+    h("label",{text:"Attach a file (optional)"}), drop,
+    msg,
+    h("div",{style:"display:flex;gap:10px;margin-top:22px"}, save,
+      h("a",{class:"btn", href: w ? `#/work/${w.id}` : "#/essays", text:"Cancel"})));
+
+  show(false, h("div",{class:"editor"},
+    h("h1",{text: w ? "Edit your work" : "Share an essay"}),
+    h("p",{class:"muted", text:"Everyone in the class will be able to read this. After posting, you can share it into any chat."}),
+    h("div",{class:"card panel", style:"margin-top:18px"}, form)));
+  title.focus();
+}
+
+/* =====================================================================
+   TEACHER
+   ===================================================================== */
+async function renderTeacher(){
+  const [{ data: people, error }] = await Promise.all([
+    sb.from("profiles").select("*").order("created_at",{ascending:true}),
+    loadRooms()
+  ]);
+  if (error) throw error;
+  people.forEach(p => { S.people[p.id] = p; });
+  const pending = people.filter(p => !p.approved);
+  const members = people.filter(p => p.approved);
+
+  const setApproved = async (p, val) => {
+    if (!val && !confirm(`Remove ${p.display_name}'s access? Their posts stay, but they won't be able to chat, read or post.`)) return;
+    const { error } = await sb.rpc("set_approved", { target: p.id, value: val });
+    if (error) alert(friendly(error)); else renderTeacher();
+  };
+  const tbl = (rows, cols) => h("table",{}, h("thead",{}, h("tr",{}, cols.map(c => h("th",{text:c})))), h("tbody",{}, rows));
+
+  const dmToggle = h("input",{type:"checkbox", checked: S.dmsEnabled});
+  dmToggle.addEventListener("change", async () => {
+    const { error } = await sb.rpc("set_dms_enabled", { value: dmToggle.checked });
+    if (error){ alert(friendly(error)); dmToggle.checked = !dmToggle.checked; return; }
+    S.dmsEnabled = dmToggle.checked;
+  });
+
+  const allDms = S.rooms.filter(r => r.kind !== "space").sort((a,b) => ts(b.last_message_at) - ts(a.last_message_at));
+
+  show(false,
+    h("h1",{text:"Teacher"}),
+    h("p",{class:"muted", text:"Approve new accounts so only your class can get in. You can delete any message, essay or space."}),
+    h("div",{class:"card panel section"},
+      h("h2",{text:`Waiting for approval (${pending.length})`}),
+      pending.length ? tbl(pending.map(p => h("tr",{},
+        h("td",{}, h("strong",{text:p.display_name})),
+        h("td",{class:"muted", text:`Signed up ${fmtDate(p.created_at)}`}),
+        h("td",{style:"text-align:right"}, h("button",{class:"btn primary small", text:"Approve", onclick:() => setApproved(p,true)}))
+      )), ["Name","",""]) : h("p",{class:"muted", text:"No one is waiting."})),
+    h("div",{class:"card panel section"},
+      h("h2",{text:"Chat settings"}),
+      h("label",{class:"toggle"}, dmToggle, "Allow private chats (direct messages and group chats)"),
+      h("p",{class:"hint", text:"When off, students can still read old private chats but can't send new messages or start new ones. Spaces are unaffected."})),
+    h("div",{class:"card panel section"},
+      h("h2",{text:`Private chats (${allDms.length})`}),
+      allDms.length ? tbl(allDms.map(r => h("tr",{},
+        h("td",{}, h("strong",{text: r.kind === "group" ? `👥 ${r.name ? r.name + ": " : ""}${memberIds(r).map(personName).sort().join(", ")}` : memberIds(r).map(personName).join(" & ")})),
+        h("td",{class:"muted", text: r.last_message_at ? `Last message ${fmtDate(r.last_message_at)}` : "No messages yet"}),
+        h("td",{style:"text-align:right"}, h("a",{class:"btn small", href:`#/chat/${r.id}`, text:"Read"}))
+      )), ["Who","",""]) : h("p",{class:"muted", text:"No private chats yet."})),
+    h("div",{class:"card panel section"},
+      h("h2",{text:`Class members (${members.length})`}),
+      tbl(members.map(p => h("tr",{},
+        h("td",{}, h("strong",{text:p.display_name})),
+        h("td",{}, h("span",{class:"pill", text: p.role === "teacher" ? "Teacher" : "Student"})),
+        h("td",{style:"text-align:right"}, p.id === me.id ? h("span",{class:"muted", text:"You"}) :
+          h("button",{class:"btn small danger", text:"Remove access", onclick:() => setApproved(p,false)}))
+      )), ["Name","Role",""]))
+  );
+}
+
+/* ---------- account ---------- */
+function renderAccount(){
+  const msg = h("div",{class:"msg err"}), ok = h("div",{class:"msg ok"});
+  const name = h("input",{type:"text", maxlength:"60", value: me.display_name});
+  show(false, h("div",{class:"editor"}, h("h1",{text:"Your account"}),
+    h("div",{class:"card panel"},
+      h("p",{class:"muted", style:"margin-top:0", text:`Signed in as ${session.user.email}`}),
+      h("form",{onsubmit: async (ev) => {
+        ev.preventDefault(); msg.textContent = ""; ok.textContent = "";
+        const v = name.value.trim(); if (!v){ msg.textContent = "Name can't be empty."; return; }
+        const { error } = await sb.from("profiles").update({ display_name: v }).eq("id", me.id);
+        if (error){ msg.textContent = friendly(error); return; }
+        me.display_name = v; if (S.people[me.id]) S.people[me.id].display_name = v;
+        renderHeader(); ok.textContent = "Saved.";
+      }}, h("label",{text:"Name shown to the class"}), name, msg, ok,
+         h("button",{class:"btn primary", type:"submit", style:"margin-top:16px", text:"Save"})))));
+}
+
+boot();
+})();
+</script>
+</body>
+</html>
