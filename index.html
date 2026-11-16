@@ -126,6 +126,12 @@ window.CLASS_CONFIG = {
   .composer .rowc{display:flex;gap:8px;align-items:flex-end}
   .composer textarea{flex:1;min-width:0;min-height:44px;height:44px;max-height:140px;font:15px/1.4 Inter,sans-serif;padding:11px 12px;resize:none}
   .composer .btn{height:44px}
+  .composer .tools{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .composer .tools .btn{height:auto}
+  .composer .file-preview{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chat-file{margin-top:6px;text-align:left}
+  .chat-file a{display:inline-flex;align-items:center;gap:6px}
+  .chat-file img{display:block;max-width:min(320px,100%);max-height:240px;margin-top:6px;border-radius:8px}
   .composer textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;background:var(--accent-soft);color:var(--accent);padding:4px 10px;border-radius:999px;margin:0 0 8px}
   .chip button{border:0;background:none;color:inherit;cursor:pointer;font-size:15px;padding:0}
@@ -256,6 +262,24 @@ function friendly(err){
   if (/already registered/i.test(m)) return "There's already an account with that email. Try signing in instead.";
   if (/row-level security|permission denied/i.test(m)) return "You don't have permission to do that.";
   return m;
+}
+const CHAT_FILE_MARKER = "\n[chat-file:v1:";
+const CHAT_FILE_TYPES = /\.(pdf|docx?|txt|csv|png|jpe?g|gif|webp)$/i;
+function encodeChatFile(body, file){
+  return `${body}${CHAT_FILE_MARKER}${encodeURIComponent(JSON.stringify(file))}]`;
+}
+function parseChatFile(body, authorId){
+  if (!body) return { text:"", file:null };
+  const marker = body.lastIndexOf(CHAT_FILE_MARKER);
+  if (marker < 0 || !body.endsWith("]")) return { text:body, file:null };
+  try{
+    const file = JSON.parse(decodeURIComponent(body.slice(marker + CHAT_FILE_MARKER.length, -1)));
+    if (typeof file.path !== "string" || !file.path.startsWith(`${authorId}/chat/`) ||
+        typeof file.name !== "string" || typeof file.type !== "string") return { text:body, file:null };
+    return { text:body.slice(0, marker), file };
+  } catch {
+    return { text:body, file:null };
+  }
 }
 const here = () => location.origin + location.pathname;
 const store = {
@@ -675,14 +699,39 @@ async function renderChat(roomId){
     const d = new Date(m.created_at);
     const time = d.toLocaleTimeString(undefined,{hour:"numeric", minute:"2-digit"});
     const node = h("div",{class: mine ? "m mine" : "m", "data-id": String(m.id)});
+    const parsed = parseChatFile(m.body, m.author_id);
     const del = (mine || me.role === "teacher") ? h("button",{class:"linkbtn del", type:"button", text:"delete", onclick: async () => {
       if (!confirm("Delete this message?")) return;
       const { error } = await sb.from("messages").delete().eq("id", m.id);
-      if (error) alert(friendly(error)); else node.remove();
+      if (error){ alert(friendly(error)); return; }
+      node.remove();
+      if (parsed.file){
+        const { error: removeError } = await sb.storage.from("works").remove([parsed.file.path]);
+        if (removeError) alert(`Message deleted, but its attachment couldn't be removed: ${friendly(removeError)}`);
+      }
     }}) : null;
+    let fileNode = null;
+    if (parsed.file){
+      fileNode = h("div",{class:"chat-file", text:"Loading attachment…"});
+      sb.storage.from("works").createSignedUrl(parsed.file.path, 60*60).then(({data,error}) => {
+        if (error) throw error;
+        if (!data?.signedUrl) throw new Error("Could not create an attachment link.");
+        const link = h("a",{href:data.signedUrl, target:"_blank", rel:"noopener noreferrer"},
+          "📎 ", parsed.file.name);
+        fileNode.replaceChildren(link);
+        if (parsed.file.type.startsWith("image/")){
+          const image = h("img",{src:data.signedUrl, alt:parsed.file.name, loading:"lazy"});
+          image.addEventListener("error", () => { image.hidden = true; });
+          fileNode.append(image);
+        }
+      }).catch(error => {
+        fileNode.replaceChildren(h("span",{class:"muted", text:`Attachment unavailable: ${friendly(error)}`}));
+      });
+    }
     node.append(...[
       h("div",{class:"who2"}, mine ? null : h("b",{text:personName(m.author_id)}), time, del),
-      m.body ? h("div",{class:"bb", text:m.body}) : null,
+      parsed.text ? h("div",{class:"bb", text:parsed.text}) : null,
+      fileNode,
       m.work_id ? workCard(m.work_id) : (m.body ? null : h("div",{class:"wcard gone", text:"Shared essay (no longer available)"}))
     ].filter(Boolean));
     return node;
@@ -727,6 +776,15 @@ async function renderChat(roomId){
     const box = h("textarea",{placeholder:`Message ${room.kind === "space" ? "#" + room.name : roomTitle(room)}…`, maxlength:"1000", rows:"1"});
     const sendBtn = h("button",{class:"btn primary", type:"submit", text:"Send"});
     const err = h("div",{class:"msg err", style:"margin:0 0 8px"});
+    const fileInput = h("input",{type:"file", accept:".pdf,.doc,.docx,.txt,.csv,.png,.jpg,.jpeg,.gif,.webp", hidden:true});
+    const filePreview = h("span",{class:"file-preview"});
+    let selectedFile = null;
+    fileInput.addEventListener("change", () => {
+      selectedFile = fileInput.files?.[0] || null;
+      filePreview.textContent = selectedFile ? `${selectedFile.name} (${Math.ceil(selectedFile.size / 1024)} KB)` : "";
+      err.textContent = selectedFile && !CHAT_FILE_TYPES.test(selectedFile.name) ? "Choose a PDF, Word document, text/CSV file, or PNG/JPG/GIF/WebP image."
+        : selectedFile && selectedFile.size > 10*1024*1024 ? "Files must be 10 MB or smaller." : "";
+    });
     const grow = () => { box.style.height = "44px"; box.style.height = Math.min(box.scrollHeight + 2, 140) + "px"; };
     box.addEventListener("input", grow);
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); form.requestSubmit(); } });
@@ -734,17 +792,51 @@ async function renderChat(roomId){
     const form = h("form",{onsubmit: async (ev) => {
       ev.preventDefault(); err.textContent = "";
       const text = box.value.trim();
-      if (!text) return;
+      if (!text && !selectedFile) return;
+      if (selectedFile && !CHAT_FILE_TYPES.test(selectedFile.name)){ err.textContent = "Choose a PDF, Word document, text/CSV file, or PNG/JPG/GIF/WebP image."; return; }
+      if (selectedFile && selectedFile.size > 10*1024*1024){ err.textContent = "Files must be 10 MB or smaller."; return; }
       sendBtn.disabled = true;
-      const { data: row, error } = await sb.from("messages")
-        .insert({ room_id: room.id, body: text, work_id: null })
-        .select("id,room_id,author_id,body,work_id,created_at").single();
-      sendBtn.disabled = false;
-      if (error){ err.textContent = friendly(error); return; }
-      box.value = ""; grow();
-      room.last_message_at = row.created_at;
-      await view.append(row); toBottom(); box.focus();
-    }}, h("div",{class:"rowc"}, box, sendBtn));
+      sendBtn.textContent = selectedFile ? "Uploading…" : "Sending…";
+      let uploadedPath = null;
+      try{
+        let body = text;
+        if (selectedFile){
+          const safeName = selectedFile.name.replace(/[^\w.\-]+/g,"_").slice(-80) || "attachment";
+          uploadedPath = `${me.id}/chat/${crypto.randomUUID()}-${safeName}`;
+          const { error: uploadError } = await sb.storage.from("works").upload(uploadedPath, selectedFile, {
+            contentType:selectedFile.type || undefined
+          });
+          if (uploadError) throw uploadError;
+          body = encodeChatFile(text, {path:uploadedPath, name:selectedFile.name, type:selectedFile.type || ""});
+        }
+        const { data: row, error } = await sb.from("messages")
+          .insert({ room_id: room.id, body, work_id: null })
+          .select("id,room_id,author_id,body,work_id,created_at").single();
+        if (error) throw error;
+        uploadedPath = null;
+        selectedFile = null; fileInput.value = ""; filePreview.textContent = "";
+        box.value = ""; grow();
+        room.last_message_at = row.created_at;
+        await view.append(row); toBottom(); box.focus();
+      } catch(error){
+        let message = friendly(error);
+        if (uploadedPath){
+          const { error: removeError } = await sb.storage.from("works").remove([uploadedPath]);
+          if (removeError) message += ` (Also couldn't clean up the uploaded file: ${friendly(removeError)})`;
+        }
+        err.textContent = message;
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = "Send";
+      }
+    }}, h("div",{class:"rowc"}, box, sendBtn),
+      h("div",{class:"tools"},
+        h("button",{class:"btn small", type:"button", text:"Attach file", onclick:() => fileInput.click()}),
+        h("button",{class:"btn small", type:"button", title:"Search animated GIFs on Google in a new tab; download one to attach it", text:"Browse GIFs", onclick:() => {
+          window.open("https://www.google.com/search?tbm=isch&tbs=itp:animated&q=animated+GIF", "_blank", "noopener,noreferrer");
+        }}),
+        filePreview, fileInput
+      ));
     composer = h("div",{class:"composer"}, err, form);
     setTimeout(() => box.focus(), 0);
   } else {
