@@ -124,7 +124,7 @@ window.CLASS_CONFIG = {
   .wcard.gone{border-left-color:var(--line);color:var(--muted);font-style:italic}
   .composer{border-top:1px solid var(--line);padding:10px 12px;position:relative}
   .composer .rowc{display:flex;gap:8px;align-items:flex-end}
-  .composer textarea{min-height:44px;height:44px;max-height:140px;font:15px/1.4 Inter,sans-serif;padding:11px 12px;resize:none}
+  .composer textarea{flex:1;min-width:0;min-height:44px;height:44px;max-height:140px;font:15px/1.4 Inter,sans-serif;padding:11px 12px;resize:none}
   .composer .btn{height:44px}
   .composer textarea::placeholder{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chip{display:inline-flex;align-items:center;gap:8px;font-size:13px;background:var(--accent-soft);color:var(--accent);padding:4px 10px;border-radius:999px;margin:0 0 8px}
@@ -200,7 +200,7 @@ window.CLASS_CONFIG = {
   .drop.over{border-color:var(--accent);background:var(--accent-soft)}
   @media (max-width:600px){.row{grid-template-columns:1fr} h1{font-size:28px} .reader h1{font-size:30px}}
 
-  /* teacher */
+  /* manager */
   table{width:100%;border-collapse:collapse;font-size:14px}
   th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
   th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
@@ -327,7 +327,7 @@ async function route(){
     if (page === "mine") return await renderLibrary(true);
     if (page === "new") return renderEditor(null);
     if (page === "edit" && id) return await renderEditor(id);
-    if (page === "teacher" && me.role === "teacher") return await renderTeacher();
+    if (page === "manager" && me.role === "teacher") return await renderManager();
     if (page === "account") return renderAccount();
     return await renderChat(page === "chat" ? id : null);
   } catch(e){
@@ -346,7 +346,7 @@ function renderHeader(){
       link("#/essays","Essays",["essays","work","edit"]),
       link("#/mine","My Work",["mine"]),
       link("#/new","Share an Essay",["new"]),
-      me.role === "teacher" ? link("#/teacher","Teacher",["teacher"]) : null
+      me.role === "teacher" ? link("#/manager","Manager",["manager"]) : null
     ) : h("nav",{class:"main"}),
     h("div",{class:"who"},
       h("a",{href:"#/account", text: me.display_name, style:"color:inherit"}),
@@ -414,7 +414,7 @@ function renderAuth(mode = "signin"){
         h("button",{class: mode === "signin" ? "on" : null, text:"Sign in", onclick:() => renderAuth("signin")}),
         h("button",{class: mode === "signup" ? "on" : null, text:"Create account", onclick:() => renderAuth("signup")})),
       form, forgot, google),
-    h("p",{class:"hint", style:"text-align:center;margin-top:18px", text:"New accounts are approved by the teacher before they can chat or read essays."})
+    h("p",{class:"hint", style:"text-align:center;margin-top:18px", text:"New accounts are approved by the manager before they can chat or read essays."})
   ));
 }
 
@@ -447,7 +447,7 @@ function renderNewPassword(){
 function renderPending(){
   show(false, h("div",{class:"card panel", style:"max-width:560px;margin:40px auto;text-align:center"},
     h("h2",{text:`Welcome, ${me.display_name}!`}),
-    h("p",{text:"Your account is waiting for your teacher's approval. Once you're approved you'll be able to chat with the class and read and share essays."}),
+    h("p",{text:"Your account is waiting for the manager's approval. Once you're approved you'll be able to chat with the class and read and share essays."}),
     h("button",{class:"btn primary", text:"Check again", onclick: async () => { me = null; route(); }})
   ));
 }
@@ -618,7 +618,7 @@ async function renderChat(roomId){
     room = S.rooms.find(r => r.id === last && inMySidebar(r)) || defaultRoom();
     if (room) { history.replaceState(null, "", `#/chat/${room.id}`); renderHeader(); }
   }
-  V = { room, list:null, side:null, status:null, latest:null, limit:PAGE, seen:new Set(), lastDay:null, attach:null };
+  V = { room, list:null, side:null, status:null, latest:null, limit:PAGE, seen:new Set(), lastDay:null };
   const view = V;
 
   if (!room){
@@ -632,9 +632,9 @@ async function renderChat(roomId){
   let sub;
   const n = memberIds(room).length;
   if (room.kind === "space") sub = "Everyone in the class";
-  else if (!isMember(room)) sub = `Teacher view of a private ${room.kind === "group" ? `group chat (${n} people)` : "conversation"}`;
-  else if (room.kind === "group") sub = `Group chat · ${n} people · the teacher can read private chats`;
-  else sub = "Private conversation · the teacher can read private chats";
+  else if (!isMember(room)) sub = `Manager view of a private ${room.kind === "group" ? `group chat (${n} people)` : "conversation"}`;
+  else if (room.kind === "group") sub = `Group chat · ${n} people · the manager can read private chats`;
+  else sub = "Private conversation · the manager can read private chats";
   const membersSlot = h("div");
   const membersBtn = (room.kind === "group") ? h("button",{class:"btn small", text:`👥 ${n}`, title:"Members", onclick: () => {
       if (membersSlot.firstChild) membersSlot.replaceChildren(); else membersSlot.replaceChildren(groupPanel(room, () => membersSlot.replaceChildren()));
@@ -727,70 +727,36 @@ async function renderChat(roomId){
     const box = h("textarea",{placeholder:`Message ${room.kind === "space" ? "#" + room.name : roomTitle(room)}…`, maxlength:"1000", rows:"1"});
     const sendBtn = h("button",{class:"btn primary", type:"submit", text:"Send"});
     const err = h("div",{class:"msg err", style:"margin:0 0 8px"});
-    const chipSlot = h("div");
-    const pickerSlot = h("div");
     const grow = () => { box.style.height = "44px"; box.style.height = Math.min(box.scrollHeight + 2, 140) + "px"; };
     box.addEventListener("input", grow);
     box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); form.requestSubmit(); } });
 
-    const drawChip = () => {
-      const w = view.attach && S.works[view.attach];
-      chipSlot.replaceChildren(w ? h("span",{class:"chip"}, `📄 ${w.title}`, h("button",{type:"button", "aria-label":"Remove essay", text:"×", onclick:() => { view.attach = null; drawChip(); }})) : "");
-    };
-    const essayBtn = h("button",{class:"btn", type:"button", title:"Share an essay", text:"📄 Essay", onclick: async () => {
-      if (pickerSlot.firstChild){ pickerSlot.replaceChildren(); return; }
-      pickerSlot.replaceChildren(await buildEssayPicker(id => { view.attach = id; drawChip(); pickerSlot.replaceChildren(); box.focus(); },
-                                                         () => pickerSlot.replaceChildren()));
-    }});
-
     const form = h("form",{onsubmit: async (ev) => {
       ev.preventDefault(); err.textContent = "";
       const text = box.value.trim();
-      if (!text && !view.attach) return;
+      if (!text) return;
       sendBtn.disabled = true;
       const { data: row, error } = await sb.from("messages")
-        .insert({ room_id: room.id, body: text || null, work_id: view.attach || null })
+        .insert({ room_id: room.id, body: text, work_id: null })
         .select("id,room_id,author_id,body,work_id,created_at").single();
       sendBtn.disabled = false;
       if (error){ err.textContent = friendly(error); return; }
-      box.value = ""; grow(); view.attach = null; drawChip();
+      box.value = ""; grow();
       room.last_message_at = row.created_at;
       await view.append(row); toBottom(); box.focus();
-    }}, h("div",{class:"rowc"}, essayBtn, box, sendBtn));
-    composer = h("div",{class:"composer"}, pickerSlot, err, chipSlot, form);
+    }}, h("div",{class:"rowc"}, box, sendBtn));
+    composer = h("div",{class:"composer"}, err, form);
     setTimeout(() => box.focus(), 0);
   } else {
     composer = h("div",{class:"readonly", text: room.kind !== "space" && isMember(room)
-      ? "Private chats are turned off by the teacher. You can still read this conversation."
-      : "You're viewing this conversation as the teacher."});
+      ? "Private chats are turned off by the manager. You can still read this conversation."
+      : "You're viewing this conversation as the manager."});
   }
 
   V.side = buildSidebar();
   show(true, h("div",{class:"card chatapp"}, V.side, h("div",{class:"pane"}, head, membersSlot, list, composer)));
   list.append(h("div",{class:"loading", text:"Loading messages…"}));
   await load(false);
-}
-
-async function buildEssayPicker(onPick, onClose){
-  const { data, error } = await sb.from("works").select("id,title,kind,author_id,created_at").order("created_at",{ascending:false}).limit(300);
-  if (error) return h("div",{class:"msg err", text:friendly(error)});
-  data.forEach(w => { S.works[w.id] = w; });
-  const q = h("input",{type:"search", placeholder:"Find an essay by title or author…"});
-  const lst = h("div",{class:"lst"});
-  const draw = () => {
-    const s = q.value.trim().toLowerCase();
-    const mine = data.filter(w => w.author_id === me.id), rest = data.filter(w => w.author_id !== me.id);
-    const rows = [...mine, ...rest].filter(w => !s || w.title.toLowerCase().includes(s) || personName(w.author_id).toLowerCase().includes(s));
-    lst.replaceChildren(...(rows.length ? rows.slice(0,60).map(w => h("button",{class:"it", type:"button", onclick:() => onPick(w.id)},
-      w.title, h("small",{text:`${w.kind} · ${w.author_id === me.id ? "you" : personName(w.author_id)}`})))
-      : [h("div",{class:"it muted", text: data.length ? "No matches." : "No essays yet. Share one from “Share an Essay”."})]));
-  };
-  q.addEventListener("input", draw);
-  q.addEventListener("keydown", e => { if (e.key === "Escape") onClose(); });
-  draw();
-  const p = h("div",{class:"picker"}, q, lst);
-  setTimeout(() => q.focus(), 0);
-  return p;
 }
 
 /* people picker shared by "New chat" and "Add people" */
@@ -807,7 +773,7 @@ function peoplePicker(exclude, onChange){
       const cb = h("input",{type:"checkbox", checked: chosen.has(p.id)});
       cb.addEventListener("change", () => { cb.checked ? chosen.add(p.id) : chosen.delete(p.id); onChange([...chosen]); });
       return h("label",{class:"person"}, cb, h("span",{class:"ic", text:initials(p.display_name)}),
-        h("span",{}, p.display_name, p.role === "teacher" ? h("span",{class:"muted", text:" · Teacher"}) : null));
+        h("span",{}, p.display_name, p.role === "teacher" ? h("span",{class:"muted", text:" · Manager"}) : null));
     }) : [h("p",{class:"muted", text: ppl.length ? "No classmates match." : "Everyone is already here."})]));
   };
   q.addEventListener("input", draw); draw();
@@ -842,7 +808,7 @@ function renderNewChat(){
   V.side = buildSidebar();
   show(true, h("div",{class:"card chatapp"}, V.side, h("div",{class:"pane"},
     h("div",{class:"panehead"}, h("div",{class:"grow"}, h("h2",{text:"New chat"}),
-      h("div",{class:"sub", text:"Pick one classmate for a direct message, or several for a group chat. The teacher can read private chats."}))),
+      h("div",{class:"sub", text:"Pick one classmate for a direct message, or several for a group chat. The manager can read private chats."}))),
     h("div",{class:"people"}, pick.el, nameRow, err, h("div",{class:"gobar"}, go)))));
   pick.focus();
 }
@@ -1090,9 +1056,9 @@ async function renderEditor(id){
 }
 
 /* =====================================================================
-   TEACHER
+   MANAGER
    ===================================================================== */
-async function renderTeacher(){
+async function renderManager(){
   const [{ data: people, error }] = await Promise.all([
     sb.from("profiles").select("*").order("created_at",{ascending:true}),
     loadRooms()
@@ -1105,7 +1071,7 @@ async function renderTeacher(){
   const setApproved = async (p, val) => {
     if (!val && !confirm(`Remove ${p.display_name}'s access? Their posts stay, but they won't be able to chat, read or post.`)) return;
     const { error } = await sb.rpc("set_approved", { target: p.id, value: val });
-    if (error) alert(friendly(error)); else renderTeacher();
+    if (error) alert(friendly(error)); else renderManager();
   };
   const tbl = (rows, cols) => h("table",{}, h("thead",{}, h("tr",{}, cols.map(c => h("th",{text:c})))), h("tbody",{}, rows));
 
@@ -1119,7 +1085,7 @@ async function renderTeacher(){
   const allDms = S.rooms.filter(r => r.kind !== "space").sort((a,b) => ts(b.last_message_at) - ts(a.last_message_at));
 
   show(false,
-    h("h1",{text:"Teacher"}),
+    h("h1",{text:"Manager"}),
     h("p",{class:"muted", text:"Approve new accounts so only your class can get in. You can delete any message, essay or space."}),
     h("div",{class:"card panel section"},
       h("h2",{text:`Waiting for approval (${pending.length})`}),
@@ -1143,7 +1109,7 @@ async function renderTeacher(){
       h("h2",{text:`Class members (${members.length})`}),
       tbl(members.map(p => h("tr",{},
         h("td",{}, h("strong",{text:p.display_name})),
-        h("td",{}, h("span",{class:"pill", text: p.role === "teacher" ? "Teacher" : "Student"})),
+        h("td",{}, h("span",{class:"pill", text: p.role === "teacher" ? "Manager" : "Student"})),
         h("td",{style:"text-align:right"}, p.id === me.id ? h("span",{class:"muted", text:"You"}) :
           h("button",{class:"btn small danger", text:"Remove access", onclick:() => setApproved(p,false)}))
       )), ["Name","Role",""]))
